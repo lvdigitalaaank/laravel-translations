@@ -5,6 +5,7 @@ namespace Outhebox\TranslationsUI\Console\Commands;
 use Illuminate\Console\Command;
 use Illuminate\Database\Schema\Builder as SchemaBuilder;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Outhebox\TranslationsUI\Actions\SyncPhrasesAction;
@@ -17,6 +18,8 @@ use Outhebox\TranslationsUI\TranslationsManager;
 
 class ImportTranslationsCommand extends Command
 {
+
+    public const CACHE_LAST_IMPORT_TIME_KEY = "translations:last-import-time";
     public TranslationsManager $manager;
 
     protected $signature = 'translations:import {--F|fresh : Truncate all translations and phrases before importing}';
@@ -47,6 +50,8 @@ class ImportTranslationsCommand extends Command
         $this->withProgressBar($this->manager->getLocales(), function ($locale) use ($translation) {
             $this->syncTranslations($translation, $locale);
         });
+
+        Cache::put(self::CACHE_LAST_IMPORT_TIME_KEY, now());
     }
 
     protected function importLanguages(): void
