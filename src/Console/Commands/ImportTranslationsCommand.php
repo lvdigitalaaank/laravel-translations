@@ -18,18 +18,16 @@ use Outhebox\TranslationsUI\TranslationsManager;
 
 class ImportTranslationsCommand extends Command
 {
-
-    public const CACHE_LAST_IMPORT_TIME_KEY = "translations:last-import-time";
-    public TranslationsManager $manager;
+    public const CACHE_LAST_IMPORT_TIME_KEY = 'translations:last-import-time';
 
     protected $signature = 'translations:import {--F|fresh : Truncate all translations and phrases before importing}';
+    protected $description = 'Sync all translation keys from the translation files to the database';
 
-    protected $description = 'Sync translation all keys from the translation files to the database';
+    private TranslationsManager $manager;
 
     public function __construct(TranslationsManager $manager)
     {
         parent::__construct();
-
         $this->manager = $manager;
     }
 
@@ -38,17 +36,16 @@ class ImportTranslationsCommand extends Command
         $this->importLanguages();
 
         if ($this->option('fresh') && $this->confirm('Are you sure you want to truncate all translations and phrases?')) {
-            $this->info('Truncating translations and phrases...'.PHP_EOL);
-
+            $this->info('Truncating translations and phrases...' . PHP_EOL);
             $this->truncateTables();
         }
 
-        $translation = $this->createOrGetSourceLanguage();
+        $sourceTranslation = $this->createOrGetSourceLanguage();
+        $this->info('Importing translations...' . PHP_EOL);
 
-        $this->info('Importing translations...'.PHP_EOL);
-
-        $this->withProgressBar($this->manager->getLocales(), function ($locale) use ($translation) {
-            $this->syncTranslations($translation, $locale);
+        $locales = $this->manager->getLocales();
+        $this->withProgressBar($locales, function (string $locale) use ($sourceTranslation) {
+            $this->syncTranslations($sourceTranslation, $locale);
         });
 
         Cache::put(self::CACHE_LAST_IMPORT_TIME_KEY, now());
@@ -56,14 +53,18 @@ class ImportTranslationsCommand extends Command
 
     protected function importLanguages(): void
     {
-        if (! $this->getSchema()->hasTable('ltu_languages') || Language::count() === 0) {
-            if ($this->confirm('The ltu_languages table does not exist or is empty, would you like to install the default languages?', true)) {
-                $this->call('db:seed', ['--class' => LanguagesTableSeeder::class]);
-            } else {
-                $this->error('The ltu_languages table does not exist or is empty, please run the translations:install command first.');
+        if (!$this->getSchema()->hasTable('ltu_languages') || Language::count() === 0) {
+            $this->handleMissingLanguagesTable();
+        }
+    }
 
-                exit;
-            }
+    private function handleMissingLanguagesTable(): void
+    {
+        if ($this->confirm('The ltu_languages table does not exist or is empty. Install default languages?', true)) {
+            $this->call('db:seed', ['--class' => LanguagesTableSeeder::class]);
+        } else {
+            $this->error('The ltu_languages table does not exist or is empty. Run the translations:install command first.');
+            exit;
         }
     }
 
@@ -83,52 +84,61 @@ class ImportTranslationsCommand extends Command
 
     public function createOrGetSourceLanguage(): Translation
     {
-        $language = Language::where('code', config('translations.source_language'))->first();
+        $languageCode = config('translations.source_language');
+        $language = Language::where('code', $languageCode)->first();
 
-        if (! $language) {
-            $this->error('Language with code '.config('translations.source_language').' not found'.PHP_EOL);
-
+        if (!$language) {
+            $this->error("Language with code $languageCode not found." . PHP_EOL);
             exit;
         }
 
-        if (! is_dir(lang_path()) || count(scandir(lang_path())) <= 2) {
-            if ($this->confirm('It seems that you don\'t have any languages yet, would you like to publish the default language files?', true)) {
-                $this->call('lang:publish');
-            } else {
-                $this->error('We can\'t find any languages in your project, please run the lang:publish command first.');
-
-                exit;
-            }
-        }
+        $this->ensureLanguageFilesExist();
 
         $translation = Translation::firstOrCreate([
             'source' => true,
             'language_id' => $language->id,
         ]);
 
-        $this->syncTranslations($translation, $language->code);
+        $this->syncTranslations($translation, $languageCode);
 
         return $translation;
     }
 
+    private function ensureLanguageFilesExist(): void
+    {
+        if (!is_dir(lang_path()) || count(scandir(lang_path())) <= 2) {
+            if ($this->confirm('No languages found. Publish default language files?', true)) {
+                $this->call('lang:publish');
+            } else {
+                $this->error('No languages found in the project. Run the lang:publish command first.');
+                exit;
+            }
+        }
+    }
+
     public function syncTranslations(Translation $translation, string $locale): void
     {
-        foreach ($this->manager->getTranslations($locale) as $file => $translations) {
-            foreach (Arr::dot($translations) as $key => $value) {
+        $translations = $this->manager->getTranslations($locale);
+
+        foreach ($translations as $file => $entries) {
+            foreach (Arr::dot($entries) as $key => $value) {
                 SyncPhrasesAction::execute($translation, $key, $value, $locale, $file);
             }
         }
 
-        if ($locale === config('translations.source_language')) {
-            return;
+        if ($locale !== config('translations.source_language')) {
+            $this->syncMissingTranslations($translation, $locale);
         }
-
-        $this->syncMissingTranslations($translation, $locale);
     }
 
     public function syncMissingTranslations(Translation $source, string $locale): void
     {
         $language = Language::where('code', $locale)->first();
+
+        if (!$language) {
+            $this->error("Language with code $locale not found.");
+            return;
+        }
 
         $translation = Translation::firstOrCreate([
             'language_id' => $language->id,
@@ -138,17 +148,27 @@ class ImportTranslationsCommand extends Command
         $source->load('phrases.translation', 'phrases.file');
 
         $source->phrases->each(function ($phrase) use ($translation, $locale) {
-            if (! $translation->phrases()->where('key', $phrase->key)->first()) {
-                $fileName = $phrase->file->name.'.'.$phrase->file->extension;
-
-                if ($phrase->file->name === config('translations.source_language')) {
-                    $fileName = Str::replaceStart(config('translations.source_language').'.', "{$locale}.", $fileName);
-                } else {
-                    $fileName = Str::replaceStart(config('translations.source_language').'/', "{$locale}/", $fileName);
-                }
-
-                SyncPhrasesAction::execute($phrase->translation, $phrase->key, '', $locale, $fileName);
-            }
+            $this->syncMissingPhrase($phrase, $translation, $locale);
         });
+    }
+
+    private function syncMissingPhrase(Phrase $phrase, Translation $translation, string $locale): void
+    {
+        if (!$translation->phrases()->where('key', $phrase->key)->exists()) {
+            $fileName = $this->generateFileName($phrase, $locale);
+            SyncPhrasesAction::execute($phrase->translation, $phrase->key, '', $locale, $fileName);
+        }
+    }
+
+    private function generateFileName(Phrase $phrase, string $locale): string
+    {
+        $file = $phrase->file;
+        $fileName = "{$file->name}.{$file->extension}";
+
+        if ($file->name === config('translations.source_language')) {
+            return Str::replaceStart(config('translations.source_language') . '.', "{$locale}.", $fileName);
+        }
+
+        return Str::replaceStart(config('translations.source_language') . '/', "{$locale}/", $fileName);
     }
 }

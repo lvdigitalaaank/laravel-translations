@@ -7,6 +7,7 @@ use Brick\VarExporter\VarExporter;
 use Exception;
 use Illuminate\Contracts\Filesystem\FileNotFoundException;
 use Illuminate\Filesystem\Filesystem;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Outhebox\TranslationsUI\Models\Translation;
 use Symfony\Component\Finder\SplFileInfo;
@@ -106,6 +107,7 @@ class TranslationsManager
                     }
                 } catch (FileNotFoundException $e) {
                     $translations[$file] = [];
+                    Log::warning($e->getMessage(), [$e]);
                 }
             });
 
@@ -144,10 +146,12 @@ class TranslationsManager
 
     public function export($download = false): void
     {
-        $translations = Translation::with('phrases')->get();
+        $translations = Translation::with(['phrases' => function($query) {
+            $query->whereNotNull('value')->with('file');
+        }])->cursor();
 
         foreach ($translations as $translation) {
-            $phrasesTree = buildPhrasesTree($translation->phrases()->with('file')->whereNotNull('value')->get(), $translation->language->code);
+            $phrasesTree = buildPhrasesTree($translation->phrases, $translation->language->code);
 
             foreach ($phrasesTree as $locale => $groups) {
                 foreach ($groups as $file => $phrases) {
