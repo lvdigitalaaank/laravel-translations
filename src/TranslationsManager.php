@@ -146,12 +146,15 @@ class TranslationsManager
 
     public function export($download = false): void
     {
-        $translations = Translation::with(['phrases' => function($query) {
-            $query->whereNotNull('value')->with('file', 'language', 'source');
-        }])->cursor();
-
+        $translations = Translation::query()->get();
         foreach ($translations as $translation) {
-            $phrasesTree = buildPhrasesTree($translation->phrases, $translation->language->code);
+            $phrasesTree = [];
+            $translation->phrases()
+                ->whereNotNull('value')
+                ->with('file', 'source')
+                ->chunk(300, function ($phrases) use ($translation, &$phrasesTree) {
+                    buildPhrasesTree($phrases, $translation->language->code, $phrasesTree);
+                });
 
             foreach ($phrasesTree as $locale => $groups) {
                 foreach ($groups as $file => $phrases) {

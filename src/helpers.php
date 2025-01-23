@@ -57,10 +57,8 @@ if (! function_exists('getPhraseParameters')) {
 }
 
 if (! function_exists('buildPhrasesTree')) {
-    function buildPhrasesTree(array $phrases, string $locale): array
+    function buildPhrasesTree(array $phrases, string $locale, &$tree = []): array
     {
-        $tree = [];
-
         /** @var \Outhebox\TranslationsUI\Models\Phrase $phrase */
         foreach ($phrases as $phrase) {
             if ($phrase->file->file_name === "$locale.json") {
