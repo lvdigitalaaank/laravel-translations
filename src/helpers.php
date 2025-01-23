@@ -57,7 +57,7 @@ if (! function_exists('getPhraseParameters')) {
 }
 
 if (! function_exists('buildPhrasesTree')) {
-    function buildPhrasesTree($phrases, $locale): array
+    function buildPhrasesTree(array $phrases, string $locale): array
     {
         $tree = [];
 
@@ -80,44 +80,24 @@ if (! function_exists('buildPhrasesTree')) {
 }
 
 if (! function_exists('setArrayValue')) {
-    function setArrayValue(&$array, $key, $value)
+    function setArrayValue(array &$array, string $key, mixed $value): void
     {
-        if (is_null($key)) {
-            return $array = $value;
+        $keys = explode('.', $key);
+        $current = &$array;
+
+        foreach ($keys as $part) {
+            if (! isset($current[$part]) || ! is_array($current[$part])) {
+                $current[$part] = [];
+            }
+            $current = &$current[$part];
         }
 
-        $keys = preg_split('/\.(?=[^.]*[^.])/', $key);
-
-        foreach ($keys as $i => $key) {
-            if (blank($value)) {
-                dd($key, $value);
-            }
-
-            if (count($keys) === 1) {
-                break;
-            }
-
-            unset($keys[$i]);
-
-            if (! isset($array[$key]) || ! is_array($array[$key])) {
-                $array[$key] = [];
-            }
-
-            $array = &$array[$key];
-        }
-
-        $lastKey = array_shift($keys);
-
-        if (! blank($lastKey)) {
-            $array[$lastKey] = $value;
-        }
-
-        return $array;
+        $current = $value;
     }
 }
 
 if (! function_exists('currentUser')) {
-    function currentUser(): null|Authenticatable|Contributor
+    function currentUser(): Authenticatable|Contributor|null
     {
         return auth('translations')->user();
     }

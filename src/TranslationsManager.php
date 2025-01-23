@@ -35,16 +35,13 @@ class TranslationsManager
             if ($this->filesystem->extension($file) !== 'json') {
                 return;
             }
-            foreach (config('translations.exclude_files') as $excludeFile) {
-                if (fnmatch($excludeFile, $file)) {
-                    return;
-                }
-                if (fnmatch($excludeFile, basename($file))) {
+            foreach (config('translations.exclude_files', []) as $excludeFile) {
+                if (fnmatch($excludeFile, $file) || fnmatch($excludeFile, basename($file))) {
                     return;
                 }
             }
 
-            if (! $locales->contains($file->getFilenameWithoutExtension())) {
+            if (!$locales->contains($file->getFilenameWithoutExtension())) {
                 $locales->push($file->getFilenameWithoutExtension());
             }
         });
@@ -107,7 +104,10 @@ class TranslationsManager
                     }
                 } catch (FileNotFoundException $e) {
                     $translations[$file] = [];
-                    Log::warning($e->getMessage(), [$e]);
+                    Log::warning("File not found: $file", ['exception' => $e]);
+                } catch (Exception $e) {
+                    $translations[$file] = [];
+                    Log::error("Error reading file: $file", ['exception' => $e]);
                 }
             });
 
@@ -147,7 +147,7 @@ class TranslationsManager
     public function export($download = false): void
     {
         $translations = Translation::with(['phrases' => function($query) {
-            $query->whereNotNull('value')->with('file');
+            $query->whereNotNull('value')->with('file', 'language', 'source');
         }])->cursor();
 
         foreach ($translations as $translation) {
