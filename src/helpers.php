@@ -66,6 +66,11 @@ if (! function_exists('buildPhrasesTree')) {
 
                 continue;
             }
+
+            if (! isset($tree[$locale][$phrase->file->file_name])) {
+                $tree[$locale][$phrase->file->file_name] = [];
+            }
+
             setArrayValue(
                 array: $tree[$locale][$phrase->file->file_name],
                 key: $phrase->key,
