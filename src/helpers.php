@@ -57,7 +57,7 @@ if (! function_exists('getPhraseParameters')) {
 }
 
 if (! function_exists('buildPhrasesTree')) {
-    function buildPhrasesTree(array $phrases, string $locale, &$tree = []): array
+    function buildPhrasesTree($phrases, string $locale, &$tree = []): array
     {
         /** @var \Outhebox\TranslationsUI\Models\Phrase $phrase */
         foreach ($phrases as $phrase) {
