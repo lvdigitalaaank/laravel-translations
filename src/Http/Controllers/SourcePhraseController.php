@@ -132,6 +132,7 @@ class SourcePhraseController extends BaseController
 
         $phrase->update([
             'value' => $request->input('phrase'),
+            'changed' => true,
             'note' => $request->input('note'),
             'translation_file_id' => $request->input('file'),
             'parameters' => getPhraseParameters($request->input('phrase')),

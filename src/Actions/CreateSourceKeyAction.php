@@ -19,6 +19,7 @@ class CreateSourceKeyAction
             'translation_file_id' => $file,
             'parameters' => getPhraseParameters($content),
             'group' => TranslationFile::find($file)?->name,
+            'changed' => true,
         ]);
 
         CopySourceKeyToTranslationsAction::execute($sourceKey);
