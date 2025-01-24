@@ -119,6 +119,7 @@ class PhraseController extends BaseController
 
         $phrase->update([
             'value' => $request->input('phrase'),
+            'changed' => true,
         ]);
 
         $nextPhrase = $translation->phrases()

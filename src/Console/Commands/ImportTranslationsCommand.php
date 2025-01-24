@@ -18,8 +18,6 @@ use Outhebox\TranslationsUI\TranslationsManager;
 
 class ImportTranslationsCommand extends Command
 {
-    public const CACHE_LAST_IMPORT_TIME_KEY = 'translations:last-import-time';
-
     protected $signature = 'translations:import {--F|fresh : Truncate all translations and phrases before importing}';
     protected $description = 'Sync all translation keys from the translation files to the database';
 
@@ -48,7 +46,6 @@ class ImportTranslationsCommand extends Command
             $this->syncTranslations($sourceTranslation, $locale);
         });
 
-        Cache::put(self::CACHE_LAST_IMPORT_TIME_KEY, now());
     }
 
     protected function importLanguages(): void

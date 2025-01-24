@@ -121,7 +121,6 @@ class SyncPhrasesAction
         mixed $value,
         TranslationFile $file
     ): void {
-        $time = Cache::get(ImportTranslationsCommand::CACHE_LAST_IMPORT_TIME_KEY);
 
         $existingPhrase = $translation->phrases()
             ->where([
@@ -131,7 +130,7 @@ class SyncPhrasesAction
             ])
             ->first();
 
-        if (!$existingPhrase || $existingPhrase->updated_at < $time) {
+        if (!$existingPhrase || !$existingPhrase->changed) {
             $translation->phrases()->updateOrCreate(
                 [
                     'key' => $key,
